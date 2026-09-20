@@ -25,6 +25,8 @@ parallel.
 """
 
 
+# Modified 2026-09-21: allow omitted camera elevation to be resolved from files.
+# Original software: US Naval Research Laboratory.
 import os
 import platform
 import logging
@@ -64,7 +66,7 @@ def index_pats_distributed(
     vendor=None,
     PC=None,
     sampleTilt=70.0,
-    camElev=5.3,
+    camElev=None,
     bandDetectPlan=None,
     nRho=90,
     nTheta=180,
@@ -112,8 +114,9 @@ def index_pats_distributed(
         Sample tilt towards the detector in degrees. Default is 70
         degrees. Unused if ``ebsd_indexer_obj`` is passed.
     camElev : float, optional
-        Camera elevation in degrees. Default is 5.3 degrees. Unused
-        if ``ebsd_indexer_obj`` is passed.
+        Camera elevation in degrees. If None (default), use the file's
+        camera elevation when available, otherwise 5.3 degrees. Explicit
+        values override file metadata. Unused if ``ebsd_indexer_obj`` is passed.
     bandDetectPlan : pyebsdindex.band_detect.BandDetect, optional
         Collection of parameters using in band detection. Unused if
         ``ebsd_indexer_obj`` is passed.

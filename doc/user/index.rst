@@ -13,6 +13,7 @@ User guide
     :maxdepth: 3
 
     ../tutorials/index.rst
+    oxford_geometry.rst
 
 .. toctree::
     :caption: Resources

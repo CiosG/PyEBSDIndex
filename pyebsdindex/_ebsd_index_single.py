@@ -32,6 +32,8 @@ single thread.
 """
 
 from timeit import default_timer as timer
+# Modified 2026-09-21: resolve omitted camera elevation from input metadata.
+# Original software: US Naval Research Laboratory.
 from pathlib import Path
 import numpy as np
 import h5py
@@ -62,7 +64,7 @@ def index_pats(
     vendor=None,
     PC=None,
     sampleTilt=70.0,
-    camElev=5.3,
+    camElev=None,
     bandDetectPlan=None,
     nRho=90,
     nTheta=180,
@@ -114,8 +116,9 @@ def index_pats(
         Sample tilt towards the detector in degrees. Default is 70
         degrees. Unused if ``ebsd_indexer_obj`` is passed.
     camElev : float, optional
-        Camera elevation in degrees. Default is 5.3 degrees. Unused
-        if ``ebsd_indexer_obj`` is passed.
+        Camera elevation in degrees. If None (default), use the file's
+        camera elevation when available, otherwise 5.3 degrees. Explicit
+        values override file metadata. Unused if ``ebsd_indexer_obj`` is passed.
     bandDetectPlan : pyebsdindex.band_detect.BandDetect, optional
         Collection of parameters using in band detection. Unused if
         ``ebsd_indexer_obj`` is passed.
@@ -294,8 +297,10 @@ class EBSDIndexer:
         Sample tilt towards the detector in degrees. Default is 70
         degrees. Unused if ``ebsd_indexer_obj`` is passed.
     camElev : float, optional
-        Camera elevation in degrees. Default is 5.3 degrees. Unused
-        if ``ebsd_indexer_obj`` is passed.
+        Camera elevation in degrees. If None (default), use the file's
+        camera elevation when available, otherwise 5.3 degrees. Explicit
+        values override file metadata. Resolved at construction; changing
+        the input file later does not change the indexer's geometry.
     bandDetectPlan : pyebsdindex.band_detect.BandDetect, optional
         Collection of parameters using in band detection. Unused if
         ``ebsd_indexer_obj`` is passed.
@@ -328,7 +333,7 @@ class EBSDIndexer:
         vendor=None,
         PC=None,
         sampleTilt=70.0,
-        camElev=5.3,
+        camElev=None,
         bandDetectPlan=None,
         nRho=90,
         nTheta=180,
@@ -347,6 +352,8 @@ class EBSDIndexer:
         if isinstance(filename, ebsd_pattern.EBSDPatternFile):
             self.filein = filename.filepath
             self.fID = filename
+            if self.fID.patternH is None:
+                self.fID.read_header()
         else:
             self.filein = filename
             if self.filein is not None:
@@ -381,7 +388,9 @@ class EBSDIndexer:
         self.PCcorrectParam = None
 
         self.sampleTilt = sampleTilt
-        self.camElev = camElev
+        if camElev is None:
+            camElev = getattr(self.fID, 'camElev', None)
+        self.camElev = 5.3 if camElev is None else camElev
 
         if bandDetectPlan is None:
             self.bandDetectPlan = band_detect.BandDetect(

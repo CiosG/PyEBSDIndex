@@ -21,12 +21,15 @@ Author: David Rowenhorst;
 The US Naval Research Laboratory Date: 21 Aug 2020'''
 
 
+# Modified 2026-09-21: infer Oxford camera elevation from optional H5OINA metadata.
+# Original software: US Naval Research Laboratory.
 import numpy as np
 from pathlib import Path
 import shutil
 import copy
 import os
 import h5py
+import warnings
 
 
 
@@ -1866,6 +1869,7 @@ class OXFORDOINA(HDF5PatFile):
   def __init__(self, path=None):
     HDF5PatFile.__init__(self, path)
     self.vendor = 'OXFORD'
+    self.camElev = None  # Degrees; inferred from optional Oxford detector metadata.
     #OXFORDOINA only attributes
     self.filedatatype = None # np.uint8
     self.patternh5id = 'Processed Patterns' # Could also be 'Raw Patterns'
@@ -1914,7 +1918,8 @@ class OXFORDOINA(HDF5PatFile):
         print(self.h5datagroups)
     return len(self.h5datagroups)
   def read_header(self, path=None):
-    
+    # Reset on every read, including when switching acquisitions.
+    self.camElev = None
     if path is not None:
       self.filepath = path
 
@@ -1948,6 +1953,19 @@ class OXFORDOINA(HDF5PatFile):
       self.xStep = np.float32(headerpath['X Step'][()][0])
       self.yStep = np.float32(headerpath['Y Step'][()][0])
 
+      if 'Detector Orientation Euler' in headerpath:
+        try:
+          orientation = np.asarray(headerpath['Detector Orientation Euler'][()], dtype=float)
+          if orientation.shape not in ((3,), (1, 3)) or not np.all(np.isfinite(orientation)):
+            raise ValueError('expected three finite Euler angles')
+          # Oxford stores Bunge Euler angles in radians. This extracts only
+          # the elevation used by the existing scalar detector geometry.
+          self.camElev = float(np.rad2deg(orientation.reshape(3)[1]) - 90.0)
+        except (TypeError, ValueError):
+          warnings.warn('Invalid Oxford Detector Orientation Euler; camera elevation is unavailable.',
+                        UserWarning, stacklevel=2)
+
+    f.close()
     return 0 #note this function uses multiple returns
 
   def pat_reader(self, patStart=0, nPatToRead=1):

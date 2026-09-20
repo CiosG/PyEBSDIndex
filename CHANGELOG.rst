@@ -6,6 +6,16 @@ All notable changes to PyEBSDIndex will be documented in this file. The format i
 on `Keep a Changelog <https://keepachangelog.com/en/1.1.0>`_.
 
 
+Unreleased
+==========
+
+Added
+-----
+- Read the scalar camera elevation from Oxford H5OINA detector orientation
+  metadata when constructing an indexer without an explicit ``camElev``.
+  Missing metadata retains the 5.3 degree fallback; explicit values override
+  metadata. Full detector azimuth/roll remain outside this scalar model.
+
 0.3.10.1 (2026-07-03)
 ==================
 BUG/ERROR FIX RELEASE
