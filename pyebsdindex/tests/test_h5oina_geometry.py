@@ -8,7 +8,7 @@ from pyebsdindex import ebsd_pattern, ebsd_index
 
 @pytest.fixture
 def h5oina(tmp_path):
-    def create(elevation=8.0, orientation=None, name='scan.h5oina'):
+    def create(elevation=8.0, orientation=None, name='scan.h5oina', tilt=None):
         path = tmp_path / name
         with h5py.File(path, 'w') as f:
             f['Format Version'] = [b'6.0']
@@ -16,6 +16,8 @@ def h5oina(tmp_path):
             h = f.require_group('1/EBSD/Header')
             for key in ('X Cells', 'Y Cells', 'X Step', 'Y Step'):
                 h[key] = [1]
+            if tilt is not None:
+                h['Tilt Angle'] = tilt
             if orientation is not None:
                 h['Detector Orientation Euler'] = orientation
             elif elevation is not None:
@@ -99,3 +101,56 @@ def test_existing_indexer_geometry_is_preserved(h5oina, monkeypatch):
 def test_flat_orientation(h5oina):
     reader = ebsd_pattern.get_pattern_file_obj(h5oina(orientation=np.radians([0, 98, 0])))
     assert reader.camElev == pytest.approx(8)
+
+
+@pytest.mark.parametrize('tilt', [-10, 0, 65, 70])
+def test_sample_tilt_and_transform(h5oina, tilt):
+    path = h5oina(tilt=[np.radians(tilt)])
+    reader = ebsd_pattern.get_pattern_file_obj(path)
+    assert reader.sampleTilt == pytest.approx(tilt)
+    indexer = ebsd_index.EBSDIndexer(filename=reader, useCPU=True)
+    assert indexer.sampleTilt == pytest.approx(tilt)
+    half_angle = np.radians(-(90 - tilt + 8)) / 2
+    np.testing.assert_allclose(indexer._detector2refframe(),
+                               [np.cos(half_angle), np.sin(half_angle), 0, 0])
+
+
+@pytest.mark.parametrize('override,expected', [(None, 65), (0, 0), (70, 70)])
+def test_sample_tilt_wrapper_override(h5oina, monkeypatch, override, expected):
+    monkeypatch.setattr(ebsd_index.EBSDIndexer, 'index_pats',
+                        lambda self, **kwargs: (None, None, 0, 1))
+    _, _, indexer = ebsd_index.index_pats(filename=h5oina(tilt=[np.radians(65)]),
+        sampleTilt=override, useCPU=True, return_indexer_obj=True)
+    assert indexer.sampleTilt == pytest.approx(expected)
+    assert indexer.camElev == pytest.approx(8)
+
+
+@pytest.mark.parametrize('tilt', [[np.nan], [np.inf], [], [1, 2], [b'invalid']])
+def test_invalid_sample_tilt(h5oina, tilt):
+    with pytest.warns(UserWarning, match='Invalid Oxford Tilt Angle'):
+        indexer = ebsd_index.EBSDIndexer(filename=h5oina(tilt=tilt), useCPU=True)
+    assert indexer.sampleTilt == 70
+    assert indexer.camElev == pytest.approx(8)
+
+
+def test_sample_tilt_missing_and_reset(h5oina):
+    path = h5oina(tilt=[np.radians(65)])
+    with h5py.File(path, 'r+') as f:
+        f.copy('1', '2')
+        del f['2/EBSD/Header/Tilt Angle']
+    reader = ebsd_pattern.get_pattern_file_obj(path)
+    assert reader.sampleTilt == pytest.approx(65)
+    reader.set_data_path('2/EBSD/Data/Processed Patterns')
+    reader.read_header()
+    assert reader.sampleTilt is None
+    assert ebsd_index.EBSDIndexer(filename=reader, useCPU=True).sampleTilt == 70
+    assert ebsd_index.EBSDIndexer(patDim=(24, 32), useCPU=True).sampleTilt == 70
+
+
+def test_sample_tilt_reused_indexer(h5oina, monkeypatch):
+    indexer = ebsd_index.EBSDIndexer(filename=h5oina(tilt=[np.radians(65)]), useCPU=True)
+    monkeypatch.setattr(ebsd_index.EBSDIndexer, 'index_pats',
+                        lambda self, **kwargs: (None, None, 0, 1))
+    _, _, reused = ebsd_index.index_pats(filename=h5oina(name='other.h5oina', tilt=[0]),
+        ebsd_indexer_obj=indexer, return_indexer_obj=True)
+    assert reused.sampleTilt == pytest.approx(65)

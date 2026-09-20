@@ -11,6 +11,9 @@ Unreleased
 
 Added
 -----
+- Read sample tilt from the selected Oxford H5OINA acquisition's ``Tilt Angle``
+  when ``sampleTilt`` is omitted. Explicit values override metadata; missing
+  metadata retains the 70 degree fallback.
 - Read the scalar camera elevation from Oxford H5OINA detector orientation
   metadata when constructing an indexer without an explicit ``camElev``.
   Missing metadata retains the 5.3 degree fallback; explicit values override

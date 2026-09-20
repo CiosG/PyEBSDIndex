@@ -63,7 +63,7 @@ def index_pats(
     phaselist=["FCC"],
     vendor=None,
     PC=None,
-    sampleTilt=70.0,
+    sampleTilt=None,
     camElev=None,
     bandDetectPlan=None,
     nRho=90,
@@ -113,8 +113,9 @@ def index_pats(
         ``vendor="EMSOFT"``, the PC must be four numbers, the final
         number being the pixel size.
     sampleTilt : float, optional
-        Sample tilt towards the detector in degrees. Default is 70
-        degrees. Unused if ``ebsd_indexer_obj`` is passed.
+        Sample tilt towards the detector in degrees. If None (default),
+        use file metadata when available, otherwise 70 degrees. Explicit
+        values override metadata. Unused if ``ebsd_indexer_obj`` is passed.
     camElev : float, optional
         Camera elevation in degrees. If None (default), use the file's
         camera elevation when available, otherwise 5.3 degrees. Explicit
@@ -294,8 +295,10 @@ class EBSDIndexer:
         0.630139). If ``vendor="EMSOFT"``, the PC must be four numbers,
         the final number being the pixel size.
     sampleTilt : float, optional
-        Sample tilt towards the detector in degrees. Default is 70
-        degrees. Unused if ``ebsd_indexer_obj`` is passed.
+        Sample tilt towards the detector in degrees. If None (default),
+        use file metadata when available, otherwise 70 degrees. Explicit
+        values override metadata. Resolved at construction; changing the
+        input file later does not change the indexer's geometry.
     camElev : float, optional
         Camera elevation in degrees. If None (default), use the file's
         camera elevation when available, otherwise 5.3 degrees. Explicit
@@ -332,7 +335,7 @@ class EBSDIndexer:
         phaselist=["FCC"],
         vendor=None,
         PC=None,
-        sampleTilt=70.0,
+        sampleTilt=None,
         camElev=None,
         bandDetectPlan=None,
         nRho=90,
@@ -387,7 +390,9 @@ class EBSDIndexer:
         self.PCcorrectMethod = None
         self.PCcorrectParam = None
 
-        self.sampleTilt = sampleTilt
+        if sampleTilt is None:
+            sampleTilt = getattr(self.fID, 'sampleTilt', None)
+        self.sampleTilt = 70.0 if sampleTilt is None else sampleTilt
         if camElev is None:
             camElev = getattr(self.fID, 'camElev', None)
         self.camElev = 5.3 if camElev is None else camElev

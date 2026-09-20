@@ -1870,6 +1870,7 @@ class OXFORDOINA(HDF5PatFile):
     HDF5PatFile.__init__(self, path)
     self.vendor = 'OXFORD'
     self.camElev = None  # Degrees; inferred from optional Oxford detector metadata.
+    self.sampleTilt = None  # Degrees; optional Oxford Tilt Angle metadata.
     #OXFORDOINA only attributes
     self.filedatatype = None # np.uint8
     self.patternh5id = 'Processed Patterns' # Could also be 'Raw Patterns'
@@ -1920,6 +1921,7 @@ class OXFORDOINA(HDF5PatFile):
   def read_header(self, path=None):
     # Reset on every read, including when switching acquisitions.
     self.camElev = None
+    self.sampleTilt = None
     if path is not None:
       self.filepath = path
 
@@ -1952,6 +1954,16 @@ class OXFORDOINA(HDF5PatFile):
 
       self.xStep = np.float32(headerpath['X Step'][()][0])
       self.yStep = np.float32(headerpath['Y Step'][()][0])
+
+      if 'Tilt Angle' in headerpath:
+        try:
+          tilt = np.asarray(headerpath['Tilt Angle'][()], dtype=float)
+          if tilt.size != 1 or not np.all(np.isfinite(tilt)):
+            raise ValueError('expected one finite tilt angle')
+          self.sampleTilt = float(np.rad2deg(tilt.reshape(-1)[0]))
+        except (TypeError, ValueError):
+          warnings.warn('Invalid Oxford Tilt Angle; sample tilt is unavailable.',
+                        UserWarning, stacklevel=2)
 
       if 'Detector Orientation Euler' in headerpath:
         try:

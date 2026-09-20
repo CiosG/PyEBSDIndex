@@ -65,7 +65,7 @@ def index_pats_distributed(
     phaselist=["FCC"],
     vendor=None,
     PC=None,
-    sampleTilt=70.0,
+    sampleTilt=None,
     camElev=None,
     bandDetectPlan=None,
     nRho=90,
@@ -111,8 +111,9 @@ def index_pats_distributed(
         ``vendor="EMSOFT"``, the PC must be four numbers, the final
         number being the pixel size.
     sampleTilt : float, optional
-        Sample tilt towards the detector in degrees. Default is 70
-        degrees. Unused if ``ebsd_indexer_obj`` is passed.
+        Sample tilt towards the detector in degrees. If None (default),
+        use file metadata when available, otherwise 70 degrees. Explicit
+        values override metadata. Unused if ``ebsd_indexer_obj`` is passed.
     camElev : float, optional
         Camera elevation in degrees. If None (default), use the file's
         camera elevation when available, otherwise 5.3 degrees. Explicit
