@@ -61,6 +61,10 @@ elif OUTPUT_FORMAT == "h5oina":
     best = data[-1]
     n = len(best)
     eulers = np.asarray(rotlib.qu2eu(best["quat"]), dtype=np.float32)
+    # H5OINA phase IDs are one-based; PyEBSDIndex uses zero-based IDs.
+    phase = np.where(best["phase"] >= 0, best["phase"] + 1, 0).astype(np.uint8)
+    # PyEBSDIndex fit is reported in degrees; H5OINA MAD is stored in radians.
+    mad = np.deg2rad(np.asarray(best["fit"], dtype=np.float32))
     acquisition = indexer.fID.h5patdatpth.strip('/').split('/')[0]
     with h5py.File(output, "r+") as h5:
         for data_group in (f"/{acquisition}/EBSD/Data",
@@ -77,6 +81,18 @@ elif OUTPUT_FORMAT == "h5oina":
             else:
                 h5.create_dataset(dataset, data=eulers)
                 h5[dataset].attrs["Unit"] = "rad"
+            for name, values, unit in (("Phase", phase, None),
+                                       ("Mean Angular Deviation", mad, "rad")):
+                dataset = data_group + "/" + name
+                if dataset in h5:
+                    stored = h5[dataset]
+                    if stored.ndim != 1 or PATSTART + n > stored.shape[0]:
+                        raise ValueError(f"Nieprawidłowy dataset {name}: {dataset}")
+                    stored[PATSTART:PATSTART + n] = values
+                else:
+                    h5.create_dataset(dataset, data=values)
+                if unit is not None:
+                    h5[dataset].attrs["Unit"] = unit
 else:
     raise ValueError('OUTPUT_FORMAT musi być "h5oina" albo "ang"')
 print(f"Zapisano: {output}")
