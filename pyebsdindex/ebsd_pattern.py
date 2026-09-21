@@ -1866,7 +1866,26 @@ class BRUKERH5(HDF5PatFile):
     return 0 #note this function uses multiple returns
 
 class OXFORDOINA(HDF5PatFile):
-  def read_pc(self):
+  def _pc_data_group(self, source='pattern'):
+    """Return the HDF5 group containing the requested Oxford PC fields."""
+    pattern_group = self.h5patdatpth.rsplit('/', 1)[0]
+    if source in (None, 'pattern', 'file'):
+      return pattern_group
+    if source not in ('mapsweeper', 'mapsweeper_data_processing'):
+      raise ValueError("Unknown Oxford PC source: " + str(source))
+
+    # Mapsweeper stores calibration arrays beside the acquisition, under
+    # ``/<acquisition>/Data Processing/Data`` rather than ``EBSD/Data``.
+    parts = self.h5patdatpth.strip('/').split('/')
+    if not parts:
+      raise ValueError('Cannot locate the Mapsweeper PC group')
+    candidate = '/' + parts[0] + '/Data Processing/Data'
+    with h5py.File(self.filepath, 'r') as f:
+      if candidate not in f:
+        raise ValueError('Mapsweeper PC group not found: ' + candidate)
+    return candidate
+
+  def read_pc(self, source='pattern'):
     """Return Oxford (PCx, PCy, detector distance) for the selected scan.
 
     Coordinates are fractions of pattern width, measured from bottom left.
@@ -1877,7 +1896,7 @@ class OXFORDOINA(HDF5PatFile):
       self.read_header()
     names = ('Pattern Center X', 'Pattern Center Y', 'Detector Distance')
     with h5py.File(self.filepath, 'r') as f:
-      data = f[self.h5patdatpth].parent
+      data = f[self._pc_data_group(source)]
       columns = []
       for name in names:
         if name not in data:

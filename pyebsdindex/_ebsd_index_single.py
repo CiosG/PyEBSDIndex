@@ -106,7 +106,9 @@ def index_pats(
         ``"KIKUCHIPY"``.
     PC : list or str, optional
         Use "file_mean" for the arithmetic mean PC over the selected Oxford
-        acquisition, or "file_per_pattern" for each pattern's stored PC.
+        acquisition, "file_per_pattern" for each pattern's stored PC, or
+        "mapsweeper"/"mapsweeper_per_pattern" to use the corresponding PC
+        arrays stored under ``/<acquisition>/Data Processing/Data``.
         These opt-in modes require complete finite H5OINA PC metadata
         and the OXFORD vendor convention. Numeric PC inputs are unchanged.
         Pattern center (PCx, PCy, PCz) in the :attr:`indexer.vendor` or
@@ -882,14 +884,22 @@ class EBSDIndexer:
         return quatref2detect
 
     def _read_file_pc(self, mode):
-        if mode not in ('file_mean', 'file_per_pattern'):
-            raise ValueError("PC mode must be 'file_mean' or 'file_per_pattern'")
+        modes = {
+            'file_mean': ('pattern', True),
+            'file_per_pattern': ('pattern', False),
+            'mapsweeper': ('mapsweeper', True),
+            'mapsweeper_per_pattern': ('mapsweeper', False),
+        }
+        if mode not in modes:
+            raise ValueError("PC mode must be 'file_mean', 'file_per_pattern', "
+                             "'mapsweeper', or 'mapsweeper_per_pattern'")
         if not isinstance(self.fID, ebsd_pattern.OXFORDOINA):
             raise ValueError('File PC modes require an Oxford H5OINA pattern file')
         if str(self.vendor).upper() != 'OXFORD':
             raise ValueError('File PC modes require the OXFORD vendor convention')
-        pc = self.fID.read_pc()
-        return pc.mean(axis=0) if mode == 'file_mean' else pc
+        source, use_mean = modes[mode]
+        pc = self.fID.read_pc(source=source)
+        return pc.mean(axis=0) if use_mean else pc
 
     def _fillPCarray(self, PC, npats, patstart=0):
         mode = None
@@ -898,7 +908,7 @@ class EBSDIndexer:
             PC = self._read_file_pc(mode)
         elif PC is None:
             mode = self.PC_file_mode
-        if mode == 'file_per_pattern':
+        if mode in ('file_per_pattern', 'mapsweeper_per_pattern'):
             values = np.asarray(self.PC if PC is None else PC)
             if patstart < 0 or npats < 0 or patstart + npats > len(values):
                 raise ValueError('Requested patterns exceed the file PC metadata range')

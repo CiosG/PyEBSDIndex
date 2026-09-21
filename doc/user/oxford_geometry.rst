@@ -65,5 +65,10 @@ Invalid or incomplete file PC metadata raises ``ValueError`` instead of silently
 falling back to a different geometry. The arithmetic mean is a convenience mode;
 its speed advantage depends on detector size and the rest of the indexing setup.
 
+Mapsweeper calibration arrays can be selected with ``PC="mapsweeper"`` (one
+mean PC) or ``PC="mapsweeper_per_pattern"`` (the PC for each pattern). These
+modes read ``/<acquisition>/Data Processing/Data/Pattern Center X`` and the
+corresponding ``Pattern Center Y`` and ``Detector Distance`` datasets.
+
 The metadata convention is specified in the
 `Oxford H5OINA specification <https://github.com/oinanoanalysis/h5oina/blob/master/H5OINAFile.md>`_.

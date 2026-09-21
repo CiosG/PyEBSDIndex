@@ -89,6 +89,21 @@ def test_selected_acquisition_and_update(pc_file):
     np.testing.assert_allclose(idx._fillPCarray(None, 2, patstart=2), expected[2:4])
 
 
+def test_mapsweeper_pc_source(pc_file, monkeypatch):
+    path, pc = pc_file
+    mapsweeper = pc + [.07, -.03, .11]
+    with h5py.File(path, 'r+') as f:
+        d = f.require_group('1/Data Processing/Data')
+        for i, key in enumerate(PC_NAMES):
+            d[key] = mapsweeper[:, i]
+    reader = ebsd_pattern.get_pattern_file_obj(path)
+    np.testing.assert_allclose(reader.read_pc(source='mapsweeper'), mapsweeper)
+    captured = capture_pc(monkeypatch)
+    idx = ebsd_index.EBSDIndexer(filename=path, PC='mapsweeper_per_pattern', useCPU=True)
+    idx.index_pats(patstart=2, npats=2)
+    np.testing.assert_allclose(captured[-1][1], mapsweeper[2:4])
+
+
 @pytest.mark.parametrize('kind', ['missing', 'nan', 'infinite', 'zero_dd', 'negative_dd', 'shape'])
 def test_bad_metadata_is_not_silently_replaced(pc_file, kind):
     path, pc = pc_file
