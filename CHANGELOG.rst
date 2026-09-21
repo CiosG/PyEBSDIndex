@@ -11,6 +11,9 @@ Unreleased
 
 Added
 -----
+- Add explicit Oxford PC modes ``file_mean`` and ``file_per_pattern`` for both
+  single-process and distributed indexing. Numeric PC inputs and the historical
+  fixed-PC default remain unchanged. File PC metadata is validated before use.
 - Read sample tilt from the selected Oxford H5OINA acquisition's ``Tilt Angle``
   when ``sampleTilt`` is omitted. Explicit values override metadata; missing
   metadata retains the 70 degree fallback.

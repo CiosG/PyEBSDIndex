@@ -41,5 +41,29 @@ and roll are not applied. Projection centers must still be supplied separately.
 The scalar sample tilt assumes the existing tilt-axis convention; this change
 does not apply ``Tilt Axis``, specimen orientation, or scanning rotation.
 
+Projection center selection
+---------------------------
+
+The Oxford reader exposes the stored ``Pattern Center X``, ``Pattern Center Y``
+and ``Detector Distance`` values through two explicit ``PC`` modes::
+
+    # One arithmetic mean PC for every pattern (lower memory and simpler GPU work)
+    fast = ebsd_index.EBSDIndexer(filename="scan.h5oina", PC="file_mean")
+
+    # The stored PCx, PCy and detector distance for every pattern
+    calibrated = ebsd_index.EBSDIndexer(
+        filename="scan.h5oina", PC="file_per_pattern"
+    )
+
+Both modes require an Oxford ``.h5oina`` file with one finite PC triplet per
+pattern and use the Oxford PC convention. Numeric values such as
+``PC=[0.5, 0.5, 0.6]`` retain their existing meaning. The default remains the
+historical fixed PC, so existing scripts do not silently change behavior.
+For a subset starting at ``patstart``, ``file_per_pattern`` selects the matching
+rows from the file. The distributed indexing entry point supports the same modes.
+Invalid or incomplete file PC metadata raises ``ValueError`` instead of silently
+falling back to a different geometry. The arithmetic mean is a convenience mode;
+its speed advantage depends on detector size and the rest of the indexing setup.
+
 The metadata convention is specified in the
 `Oxford H5OINA specification <https://github.com/oinanoanalysis/h5oina/blob/master/H5OINAFile.md>`_.

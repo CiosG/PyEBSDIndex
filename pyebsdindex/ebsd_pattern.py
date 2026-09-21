@@ -1866,6 +1866,31 @@ class BRUKERH5(HDF5PatFile):
     return 0 #note this function uses multiple returns
 
 class OXFORDOINA(HDF5PatFile):
+  def read_pc(self):
+    """Return Oxford (PCx, PCy, detector distance) for the selected scan.
+
+    Coordinates are fractions of pattern width, measured from bottom left.
+    Missing, non-finite, or incorrectly sized metadata raises ValueError.
+    No pattern images are loaded by this method.
+    """
+    if self.h5patdatpth is None or self.nPatterns is None:
+      self.read_header()
+    names = ('Pattern Center X', 'Pattern Center Y', 'Detector Distance')
+    with h5py.File(self.filepath, 'r') as f:
+      data = f[self.h5patdatpth].parent
+      columns = []
+      for name in names:
+        if name not in data:
+          raise ValueError('Missing Oxford PC metadata: ' + name)
+        values = np.asarray(data[name][()], dtype=float)
+        if values.shape not in ((int(self.nPatterns),), (int(self.nPatterns), 1)):
+          raise ValueError('Oxford PC metadata must contain one value per pattern: ' + name)
+        columns.append(values.reshape(-1))
+    pc = np.column_stack(columns)
+    if len(pc) == 0 or not np.all(np.isfinite(pc)) or np.any(pc[:, 2] <= 0):
+      raise ValueError('Oxford PC metadata must be finite with positive detector distances')
+    return pc
+
   def __init__(self, path=None):
     HDF5PatFile.__init__(self, path)
     self.vendor = 'OXFORD'

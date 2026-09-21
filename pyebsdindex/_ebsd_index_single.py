@@ -104,7 +104,11 @@ def index_pats(
         the returned orientations. The available options are ``"EDAX"``
         (default), ``"BRUKER"``, ``"OXFORD"``, ``"EMSOFT"``,
         ``"KIKUCHIPY"``.
-    PC : list, optional
+    PC : list or str, optional
+        Use "file_mean" for the arithmetic mean PC over the selected Oxford
+        acquisition, or "file_per_pattern" for each pattern's stored PC.
+        These opt-in modes require complete finite H5OINA PC metadata
+        and the OXFORD vendor convention. Numeric PC inputs are unchanged.
         Pattern center (PCx, PCy, PCz) in the :attr:`indexer.vendor` or
         ``vendor`` convention. For EDAX TSL, this is (x*, y*, z*),
         defined in fractions of pattern width with respect to the lower
@@ -287,7 +291,11 @@ class EBSDIndexer:
         the returned orientations. The available options are ``"EDAX"``
         (default), ``"BRUKER"``, ``"OXFORD"``, ``"EMSOFT"``,
         ``"KIKUCHIPY"``.
-    PC : list, optional
+    PC : list or str, optional
+        Use "file_mean" for the arithmetic mean PC over the selected Oxford
+        acquisition, or "file_per_pattern" for each pattern's stored PC.
+        These opt-in modes require complete finite H5OINA PC metadata
+        and the OXFORD vendor convention. Numeric PC inputs are unchanged.
         Pattern center (PCx, PCy, PCz) in the ``vendor`` convention. For
         EDAX TSL, this is (x*, y*, z*), defined in fractions of pattern
         width with respect to the lower left corner of the detector. If
@@ -382,7 +390,10 @@ class EBSDIndexer:
         else:
             self.vendor = vendor
 
-        if PC is None:
+        self.PC_file_mode = PC if isinstance(PC, str) else None
+        if isinstance(PC, str):
+            self.PC = self._read_file_pc(PC)
+        elif PC is None:
             self.PC = np.array([0.471659, 0.675044, 0.630139])  # A default value
         else:
             self.PC = np.asarray(PC)
@@ -469,6 +480,9 @@ class EBSDIndexer:
                 self.fID.read_header()
             patDim[0:] = np.array([self.fID.patternH, self.fID.patternW])
 
+        if filename is not None and self.PC_file_mode is not None:
+            self.PC = self._read_file_pc(self.PC_file_mode)
+
         if (patDim[0] != self.bandDetectPlan.patDim[0]) or \
             (patDim[1] != self.bandDetectPlan.patDim[1]):
             # need to setup banddetect for new pattern dimensions.
@@ -504,7 +518,11 @@ class EBSDIndexer:
             index up to the final pattern in ``patsin``.
         clparams : list, optional
             OpenCL parameters passed to :mod:`pyopencl`.
-        PC : list, optional
+        PC : list or str, optional
+            Use "file_mean" for the arithmetic mean PC over the selected Oxford
+            acquisition, or "file_per_pattern" for each pattern's stored PC.
+            For supplied pattern batches, patstart is the global file offset.
+            Numeric PC inputs apply directly to the supplied batch.
             Pattern center (PC) parameters (PCx, PCy, PCz) in the vendor
             convention. For EDAX TSL, this is (x*, y*, z*), defined in
             fractions of pattern width with respect to the lower left
@@ -564,10 +582,9 @@ class EBSDIndexer:
             self.bandDetectPlan.band_detect_setup(patterns=pats)
 
         npoints = pats.shape[0]
-        if npats == -1:
-            npats = npoints
-
-        PCpat = self._fillPCarray(PC, npats)
+        # The reader can clip the requested count at the end of a file.
+        npats = npoints
+        PCpat = self._fillPCarray(PC, npats, patstart=patstart)
 
         gpuid = gpu_id
         try: # just in case the user sends in the gpu_id as a list/array
@@ -864,7 +881,28 @@ class EBSDIndexer:
 
         return quatref2detect
 
-    def _fillPCarray(self, PC, npats):
+    def _read_file_pc(self, mode):
+        if mode not in ('file_mean', 'file_per_pattern'):
+            raise ValueError("PC mode must be 'file_mean' or 'file_per_pattern'")
+        if not isinstance(self.fID, ebsd_pattern.OXFORDOINA):
+            raise ValueError('File PC modes require an Oxford H5OINA pattern file')
+        if str(self.vendor).upper() != 'OXFORD':
+            raise ValueError('File PC modes require the OXFORD vendor convention')
+        pc = self.fID.read_pc()
+        return pc.mean(axis=0) if mode == 'file_mean' else pc
+
+    def _fillPCarray(self, PC, npats, patstart=0):
+        mode = None
+        if isinstance(PC, str):
+            mode = PC
+            PC = self._read_file_pc(mode)
+        elif PC is None:
+            mode = self.PC_file_mode
+        if mode == 'file_per_pattern':
+            values = np.asarray(self.PC if PC is None else PC)
+            if patstart < 0 or npats < 0 or patstart + npats > len(values):
+                raise ValueError('Requested patterns exceed the file PC metadata range')
+            return values[patstart:patstart + npats].copy()
         if PC is None:
             PC = np.array(self.PC)
         else:
@@ -891,7 +929,7 @@ class EBSDIndexer:
         def h5getatrib(h5grp, obj, item):
             thisitem = getattr(obj, item)
             if thisitem is not None:
-                if type(thisitem) is str:
+                if isinstance(thisitem, (str, Path)):
                     h5grp[item] = str(thisitem).encode('utf-8')
                 else:
                     h5grp[item] = thisitem
@@ -902,7 +940,7 @@ class EBSDIndexer:
             excludedpaths = ["fID",
                              "bandDetectPlan",
                              "phaseLib", "phaselist",
-                             'PCcorrectMethod', 'PCcorrectParam', 'dataTemplate']
+                             'PCcorrectMethod', 'PCcorrectParam', 'dataTemplate', 'gnomonic']
 
             savedict = {}
             hfile['version'] = str(__version__).encode('ascii')
@@ -1042,6 +1080,8 @@ def restoreindexer(filename='indexer.pyindx'):
             newindexer.bandDetectPlan.kernel = kernel
             newindexer.bandDetectPlan.backgroundsub = backgroundsub
             newindexer.bandDetectPlan.rdnmask = rdnmask
+            if 'PC_file_mode' in hfile:
+                newindexer.PC_file_mode = hfile['PC_file_mode'][()].decode('utf-8')
 
             return newindexer
 

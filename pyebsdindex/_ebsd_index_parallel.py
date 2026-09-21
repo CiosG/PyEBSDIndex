@@ -102,7 +102,11 @@ def index_pats_distributed(
         the returned orientations. The available options are ``"EDAX"``
         (default), ``"BRUKER"``, ``"OXFORD"``, ``"EMSOFT"``,
         ``"KIKUCHIPY"``.
-    PC : list, optional
+    PC : list or str, optional
+        Use "file_mean" for the arithmetic mean PC over the selected Oxford
+        acquisition, or "file_per_pattern" for each pattern's stored PC.
+        These opt-in modes require complete finite H5OINA PC metadata
+        and the OXFORD vendor convention. Numeric PC inputs are unchanged.
         Pattern center (PCx, PCy, PCz) in the :attr:`indexer.vendor` or
         ``vendor`` convention. For EDAX TSL, this is (x*, y*, z*),
         defined in fractions of pattern width with respect to the lower
@@ -369,7 +373,7 @@ def index_pats_distributed(
             chunksize = 256
     ncpuwrker = n_cpu_nodes
 
-    PCpat = indexer._fillPCarray(PC, npats)
+    PCpat = indexer._fillPCarray(PC, npats, patstart=patstart)
 
     ray.shutdown()
 
@@ -486,7 +490,7 @@ def index_pats_distributed(
                 gpuworkers[i].findbands.remote(gjob,
                                                pats=None,
                                                indexer=remote_indexer,
-                                               PC = PCpat[gjob.pstart:gjob.pend, :]
+                                               PC = PCpat[gjob.pstart - patstart:gjob.pend - patstart, :]
                                                )
             )
         else:
@@ -494,7 +498,7 @@ def index_pats_distributed(
                 gpuworkers[i].findbands.remote(gjob,
                                                pats=pats[gjob.pstart:gjob.pend, :, :],
                                                indexer=remote_indexer,
-                                               PC=PCpat[gjob.pstart:gjob.pend, :]
+                                               PC=PCpat[gjob.pstart - patstart:gjob.pend - patstart, :]
                                                )
             )
         gtaskindex.append(gjob)
@@ -562,14 +566,14 @@ def index_pats_distributed(
                         if inputmode == "filemode":
                             gputask[jid] = gpuworkers[jid].findbands.remote(gjob,
                                     pats=None,
-                                    PC=PCpat[gjob.pstart:gjob.pend, :],
+                                    PC=PCpat[gjob.pstart - patstart:gjob.pend - patstart, :],
                                     indexer=remote_indexer
 
                             )
                         else:
                             gputask[jid] = gpuworkers[jid].findbands.remote(gjob,
                                 pats=pats[gjob.pstart:gjob.pend, :, :],
-                                PC=PCpat[gjob.pstart:gjob.pend, :],
+                                PC=PCpat[gjob.pstart - patstart:gjob.pend - patstart, :],
                                 indexer=remote_indexer,
                            )
                         gtaskindex[jid] = gjob
@@ -611,7 +615,7 @@ def index_pats_distributed(
                                 gputask.append(
                                     gpuworkers[0].findbands.remote(gjob,
                                         pats=None,
-                                        PC=PCpat[gjob.pstart:gjob.pend, :],
+                                        PC=PCpat[gjob.pstart - patstart:gjob.pend - patstart, :],
                                         indexer=remote_indexer
                                     )
                                 )
@@ -619,7 +623,7 @@ def index_pats_distributed(
                                 gputask.append(
                                     gpuworkers[0].findbands.remote(gjob,
                                        pats=pats[gjob.pstart:gjob.pend, :, :],
-                                       PC=PCpat[gjob.pstart:gjob.pend, :],
+                                       PC=PCpat[gjob.pstart - patstart:gjob.pend - patstart, :],
                                        indexer=remote_indexer,
                                     )
                                 )
@@ -653,14 +657,14 @@ def index_pats_distributed(
                             gpuworkers[0].findbands.remote(gjob,
                                                            pats=None,
                                                            indexer=remote_indexer,
-                                                           PC = PCpat[gjob.pstart:gjob.pend, :],
+                                                           PC = PCpat[gjob.pstart - patstart:gjob.pend - patstart, :],
                                                            )
                         )
                     else:
                         gputask.append(
                             gpuworkers[0].findbands.remote(gjob,
                                                            pats=pats[gjob.pstart:gjob.pend, :, :],
-                                                           PC=PCpat[gjob.pstart:gjob.pend, :],
+                                                           PC=PCpat[gjob.pstart - patstart:gjob.pend - patstart, :],
                                                            indexer=remote_indexer,
                                                            )
                         )
